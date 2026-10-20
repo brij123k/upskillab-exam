@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -sL https://upskillab.com/assets/index-DOu86l9N.css -o idx.css)",
+      "Bash(curl -sI https://upskillab.com/images/Logo.png)",
+      "Bash('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' --headless=new --disable-gpu --hide-scrollbars --window-size=1440,5400 --virtual-time-budget=5000 --screenshot=/private/tmp/claude-501/-Users-brijkumar-Desktop-exam-creatation/21dc549a-a84e-41be-8dc5-90ff886a39e7/scratchpad/v2-landing.png http://localhost:5173/)",
+      "Bash('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' --headless=new --disable-gpu --hide-scrollbars --window-size=1440,1300 --virtual-time-budget=4000 --screenshot=/private/tmp/claude-501/-Users-brijkumar-Desktop-exam-creatation/21dc549a-a84e-41be-8dc5-90ff886a39e7/scratchpad/v2-register.png http://localhost:5173/register)",
+      "Bash('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' --headless=new --disable-gpu --hide-scrollbars --force-prefers-reduced-motion --window-size=1440,5400 --virtual-time-budget=5000 --screenshot=/private/tmp/claude-501/-Users-brijkumar-Desktop-exam-creatation/21dc549a-a84e-41be-8dc5-90ff886a39e7/scratchpad/v3-landing.png http://localhost:5173/)",
+      "Bash(mkdir -p /private/tmp/claude-501/-Users-brijkumar-Desktop-exam-creatation/21dc549a-a84e-41be-8dc5-90ff886a39e7/scratchpad/shot)",
+      "Bash(npm init *)",
+      "Bash(PUPPETEER_SKIP_DOWNLOAD=1 npm i puppeteer-core@23.5.0)",
+      "Bash(node flow.mjs /private/tmp/claude-501/-Users-brijkumar-Desktop-exam-creatation/21dc549a-a84e-41be-8dc5-90ff886a39e7/scratchpad desktop)",
+      "Bash(node flow.mjs /private/tmp/claude-501/-Users-brijkumar-Desktop-exam-creatation/21dc549a-a84e-41be-8dc5-90ff886a39e7/scratchpad mobile)"
+    ]
+  }
+}
