@@ -1,6 +1,6 @@
 
-// const API_BASE_URL ="https://exam-api.upskillab.com";
-const API_BASE_URL ="http://localhost:3000";
+const API_BASE_URL ="https://exam-api.upskillab.com";
+// const API_BASE_URL ="http://localhost:3000";
 
 export const API_CONFIG = {
   BASE_URL: API_BASE_URL,
