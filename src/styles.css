@@ -732,3 +732,14 @@ kbd { font-family: inherit; font-size: .75rem; background: #f4f1f6; border: 1px 
   .modal-actions { grid-template-columns: 1fr; }
   .thanks { padding: 34px 22px; }
 }
+
+
+.form-section-sub { color: #6b7280; margin: -4px 0 16px; font-size: 0.9rem; }
+.otp-input { letter-spacing: 0.5em; font-variant-numeric: tabular-nums; font-family: monospace; }
+.otp-timer { display: block; color: #6b7280; font-size: 0.78rem; margin-top: 6px; }
+.otp-timer.expired { color: #dc2626; }
+.otp-actions { display: flex; justify-content: space-between; margin-top: 8px; }
+.btn-link { background: none; border: none; color: #2563eb; font-size: 0.85rem; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+.btn-link:disabled { opacity: 0.45; cursor: not-allowed; }
+.success-panel { text-align: center; }
+.success-icon { display: inline-flex; width: 72px; height: 72px; border-radius: 50%; background: #ecfdf5; color: #059669; align-items: center; justify-content: center; margin-bottom: 12px; }

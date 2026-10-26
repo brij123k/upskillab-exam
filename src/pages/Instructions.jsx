@@ -1,16 +1,20 @@
-import { Link } from 'react-router-dom';
+
+import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import {
-  ArrowRight, CalendarDays, MapPin, Smartphone, MonitorCheck, ClipboardList, Brain, BarChart3,
-  Flag, Headphones, BatteryCharging, Wifi, IdCard, BellOff, MessageSquareOff, Hand, Clock,
+  ArrowRight, CalendarDays, MapPin, Smartphone, MonitorCheck,
+  ClipboardList, Brain, BarChart3, Flag, Headphones,
+  BatteryCharging, Wifi, IdCard, BellOff, MessageSquareOff,
+  Hand, Clock, BookOpen, GraduationCap, CheckCircle2,
 } from 'lucide-react';
+
 import { Header, Footer, Pending, Reveal } from '../components/Layout';
 
 const SECTIONS = [
-  ['key', 'Key details'],
-  ['before', 'Before the event'],
-  ['phase1', 'Phase 1: Psychometric Test'],
-  ['phase2', 'Phase 2: Academic Analysis'],
-  ['after', 'After the event'],
+  ['key', 'Exam details'],
+  ['before', 'Before the exam'],
+  ['instructions', 'Exam instructions'],
+  ['after', 'After the exam'],
   ['help', 'Need help?'],
 ];
 
@@ -45,125 +49,281 @@ function Steps({ items }) {
 }
 
 export default function Instructions() {
+  const navigate = useNavigate();
+  const [savedData, setSavedData] = useState(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('registrationData');
+
+      if (!raw) {
+        navigate('/register', { replace: true });
+        return;
+      }
+
+      const data = JSON.parse(raw);
+
+      if (!data?.registration || !data?.exam) {
+        navigate('/register', { replace: true });
+        return;
+      }
+
+      setSavedData(data);
+    } catch {
+      localStorage.removeItem('registrationData');
+      navigate('/register', { replace: true });
+    }
+  }, [navigate]);
+
+  if (!savedData) {
+    return (
+      <>
+        <Header />
+        <section className="section">
+          <div className="container">
+            <p>Loading exam instructions...</p>
+          </div>
+        </section>
+        <Footer />
+      </>
+    );
+  }
+
+  const { registration, exam } = savedData;
+  const examInstructions = Array.isArray(exam.instructions)
+    ? exam.instructions
+    : [];
+
   return (
     <>
       <Header />
+
       <section className="page-hero dark">
         <div className="hero-grid-bg" />
         <div className="container">
-          <span className="crumbs"><Link to="/">Home</Link> / Instructions</span>
+          <span className="crumbs">
+            <Link to="/">Home</Link> / Exam Instructions
+          </span>
+
           <h1>Instructions for Students</h1>
-          <p>Please read these instructions carefully before the event.</p>
+          <p>
+            Welcome, {registration.fullName}. Please read the
+            instructions for your assigned assessment carefully.
+          </p>
+
           <div className="quick-tips">
-            <span><BatteryCharging size={16} /> Phone fully charged</span>
+            <span><BatteryCharging size={16} /> Device charged</span>
             <span><Wifi size={16} /> Working internet</span>
-            <span><IdCard size={16} /> Carry your ID</span>
-            <span><BellOff size={16} /> Phone on silent</span>
+            <span><IdCard size={16} /> Student ID ready</span>
+            <span><BellOff size={16} /> Notifications off</span>
           </div>
         </div>
       </section>
 
       <section className="section ins-section">
         <div className="container ins-layout">
+
           <aside className="ins-nav">
             <span className="ins-nav-title">On this page</span>
+
             {SECTIONS.map(([id, label], i) => (
               <a key={id} href={`#${id}`}>
                 <span>{String(i + 1).padStart(2, '0')}</span>
                 {label}
               </a>
             ))}
-            <Link to="/register" className="btn btn-primary btn-sm btn-block">Register Now</Link>
+
+            <Link
+              to="/register"
+              className="btn btn-primary btn-sm btn-block"
+            >
+              Back to registration
+            </Link>
           </aside>
 
           <div className="ins-content">
-            <Block id="key" num="01" icon={CalendarDays} title="Key details">
+
+            {/* Actual exam details from the backend */}
+            <Block
+              id="key"
+              num="01"
+              icon={BookOpen}
+              title="Your exam details"
+            >
               <div className="key-grid">
                 <div className="key-card orange">
-                  <div className="key-top"><Brain size={20} /> Phase 1: Psychometric Test</div>
+                  <div className="key-top">
+                    <Brain size={20} />
+                    Assessment
+                  </div>
+
+                  <h3>{exam.title || 'Untitled assessment'}</h3>
+
+                  <p>
+                    {exam.description ||
+                      'No exam description is available.'}
+                  </p>
+
                   <ul>
-                    <li><CalendarDays size={16} /> 2 November 2026</li>
-                    <li><MapPin size={16} /> Auditorium</li>
-                    <li><Smartphone size={16} /> On your own smartphone via a link</li>
-                    <li><Clock size={16} /> Report by <Pending>time</Pending></li>
+                    <li>
+                      <Clock size={16} />
+                      Duration: {exam.durationMinutes ?? '—'} minutes
+                    </li>
+                    <li>
+                      <ClipboardList size={16} />
+                      Total marks: {exam.totalMarks ?? '—'}
+                    </li>
+                    <li>
+                      <CheckCircle2 size={16} />
+                      Passing marks: {exam.passingMarks ?? '—'}
+                    </li>
+                    {exam.publishedAt && (
+                      <li>
+                        <CalendarDays size={16} />
+                        Published:{' '}
+                        {new Date(exam.publishedAt).toLocaleDateString(
+                          'en-IN',
+                          {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          }
+                        )}
+                      </li>
+                    )}
                   </ul>
                 </div>
+
                 <div className="key-card purple">
-                  <div className="key-top"><BarChart3 size={20} /> Phase 2: Academic Analysis</div>
+                  <div className="key-top">
+                    <GraduationCap size={20} />
+                    Student details
+                  </div>
+
                   <ul>
-                    <li><CalendarDays size={16} /> 3 and 4 November 2026</li>
-                    <li><MonitorCheck size={16} /> Computer labs</li>
-                    <li><Clock size={16} /> Report to <Pending>lab / slot details</Pending></li>
+                    <li>
+                      <IdCard size={16} />
+                      Student ID: {registration.studentId || '—'}
+                    </li>
+                    <li>
+                      <BookOpen size={16} />
+                      Name: {registration.fullName || '—'}
+                    </li>
+                    <li>
+                      <ClipboardList size={16} />
+                      Email: {registration.email || '—'}
+                    </li>
+                    <li>
+                      <Smartphone size={16} />
+                      Mobile: {registration.mobileNumber || '—'}
+                    </li>
+                    <li>
+                      <CheckCircle2 size={16} />
+                      Status: {registration.registrationStatus || 'Registered'}
+                    </li>
                   </ul>
                 </div>
               </div>
             </Block>
 
-            <Block id="before" num="02" icon={ClipboardList} title="Before the event">
+            <Block
+              id="before"
+              num="02"
+              icon={ClipboardList}
+              title="Before the exam"
+            >
               <Steps
                 items={[
-                  <>Complete your registration on the landing page before <Pending>registration deadline</Pending>.</>,
-                  <>Keep your registered mobile number and email address handy. The test link will be shared via <Pending>mode and time</Pending>.</>,
-                  'Phase 1: make sure your smartphone is fully charged and has a working internet connection.',
-                  <>Carry <Pending>college ID card / documents required</Pending>.</>,
-                  <>Phase 2 (final-year students): also carry <Pending>documents required for the academic analysis</Pending>.</>,
+                  'Read all the exam instructions before starting.',
+                  'Make sure your device is charged and your internet connection is stable.',
+                  'Keep your registered email address and mobile number available.',
+                  'Find a quiet place where you can complete the assessment without interruptions.',
+                  'Do not refresh or close the exam page while an exam is in progress unless instructed to do so.',
                 ]}
               />
             </Block>
 
-            <Block id="phase1" num="03" icon={Smartphone} title="Phase 1: Psychometric Test, 2 November 2026" tone="tone-orange">
-              <Steps
-                items={[
-                  <>Reach the auditorium by <Pending>time</Pending> and take your seat as directed by the team.</>,
-                  'Open the test link only when instructed by the Upskillab team.',
-                  <>Enter your details exactly as given at registration. <Pending>Confirm login steps.</Pending></>,
-                  'Answer every question honestly and instinctively. There are no right or wrong answers.',
-                  <>Complete the test in one sitting, within <Pending>duration</Pending>.</>,
-                  'Keep your phone on silent. Do not use other apps, calls or messages during the test.',
-                  'Do not discuss your answers with others. Every response should be your own.',
-                  'If you face a technical difficulty, raise your hand and a team member will assist you.',
-                ]}
-              />
-            </Block>
+            <Block
+              id="instructions"
+              num="03"
+              icon={MonitorCheck}
+              title="Exam instructions"
+              tone="tone-orange"
+            >
+              {examInstructions.length > 0 ? (
+                <Steps items={examInstructions} />
+              ) : (
+                <p>
+                  No additional exam instructions were provided by the
+                  server. Please follow the instructions shown when you
+                  begin the assessment.
+                </p>
+              )}
 
-            <Block id="phase2" num="04" icon={MonitorCheck} title="Phase 2: Academic Analysis, 3 and 4 November 2026" tone="tone-purple">
-              <Steps
-                items={[
-                  <>Report to <Pending>computer lab</Pending> at your allotted slot of <Pending>time</Pending>.</>,
-                  'Follow the instructions of the Upskillab team and the lab coordinators.',
-                  <>Use the lab computer only for the assigned activity. <Pending>Confirm rules on personal devices.</Pending></>,
-                  <>Complete the activity within <Pending>duration</Pending>. <Pending>Describe the activity in one line.</Pending></>,
-                  'If you need support, raise your hand and a team member will assist you.',
-                ]}
-              />
-            </Block>
-
-            <Block id="after" num="05" icon={Flag} title="After the event">
               <ul className="ins-bullets">
-                <li><MessageSquareOff size={18} /> Please do not share the test link or questions with others.</li>
-                <li><BarChart3 size={18} /> Upskillab will analyse the outcomes and share a detailed analysis with the college by the end of November 2026 to guide academic counselling.</li>
-                <li><Flag size={18} /> <Pending>Confirm what students receive after the event.</Pending></li>
+                <li>
+                  <BellOff size={18} />
+                  Avoid notifications, calls, and other applications
+                  during the assessment.
+                </li>
+                <li>
+                  <Wifi size={18} />
+                  Maintain a stable internet connection.
+                </li>
+                <li>
+                  <Flag size={18} />
+                  Submit your answers before the exam timer expires.
+                </li>
+              </ul>
+            </Block>
+
+            <Block
+              id="after"
+              num="04"
+              icon={Flag}
+              title="After the exam"
+            >
+              <ul className="ins-bullets">
+                <li>
+                  <CheckCircle2 size={18} />
+                  Make sure you complete the submission process.
+                </li>
+                <li>
+                  <MessageSquareOff size={18} />
+                  Do not share exam questions or answers with others.
+                </li>
+                <li>
+                  <BarChart3 size={18} />
+                  Your results will be handled according to the
+                  assessment programme's process.
+                </li>
               </ul>
             </Block>
 
             <Reveal>
               <section id="help" className="ins-help">
-                <div className="help-icon big"><Headphones size={26} /></div>
+                <div className="help-icon big">
+                  <Headphones size={26} />
+                </div>
+
                 <div>
                   <h3>Need help?</h3>
                   <p>
-                    Helpline: <Pending>phone / email / WhatsApp</Pending> &nbsp;·&nbsp; Available: <Pending>timings</Pending>
+                    If you experience a technical problem, contact your
+                    assessment coordinator.
                   </p>
-                  <p className="small"><Hand size={15} /> On the day, just raise your hand and a team member will assist you.</p>
+                  <p className="small">
+                    <Hand size={15} />
+                    Follow the instructions provided by your coordinator.
+                  </p>
                 </div>
-                <Link to="/register" className="btn btn-primary">
-                  Register Now <ArrowRight size={17} />
-                </Link>
               </section>
             </Reveal>
+
           </div>
         </div>
       </section>
+
       <Footer />
     </>
   );

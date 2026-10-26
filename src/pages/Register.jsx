@@ -1,16 +1,17 @@
-import { useState } from 'react';
+import { useState,useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   User, Mail, Phone, Building2, Layers, GraduationCap, GitBranch, CalendarRange, ClipboardCheck,
   ArrowRight, ArrowLeft, Loader2, CalendarDays, MapPin, BadgeIndianRupee, Check, ChevronDown,
 } from 'lucide-react';
 import { Header, Pending } from '../components/Layout';
-import { registerStudent } from '../api';
+import apiService from '../api/apiService';
+import { API_CONFIG } from '../api/apiConfig';
 import { setSession } from '../session';
 import { DOMAINS, INSTITUTE_NAME, VERTICALS, COURSES, BRANCHES, COURSE_YEARS } from '../config';
 
 const INITIAL = {
-  domainId: DOMAINS[0].id,
+  domainId: '',
   instituteName: INSTITUTE_NAME,
   verticalName: '',
   courseName: '',
@@ -32,7 +33,7 @@ function validate(f, consent) {
   if (!f.branchName) e.branchName = 'Please select your branch.';
   if (!f.courseYear) e.courseYear = 'Please select your year.';
   if (f.fullName.trim().length < 2) e.fullName = 'Please enter your full name.';
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email)) e.email = 'Please enter a valid email address.';
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim())) {e.email = 'Please enter a valid email address.';}
   if (!/^[6-9]\d{9}$/.test(f.mobileNumber)) e.mobileNumber = 'Enter a valid 10-digit mobile number.';
   if (!consent) e.consent = 'Please accept the consent to continue.';
   return e;
@@ -45,6 +46,9 @@ export default function Register() {
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [apiError, setApiError] = useState('');
+  const [domains, setDomains] = useState([]);
+const [domainsLoading, setDomainsLoading] = useState(true);
+const [domainsError, setDomainsError] = useState('');
 
   const update = (name) => (e) => {
     let value = e.target.value;
@@ -52,6 +56,62 @@ export default function Register() {
     setForm((f) => ({ ...f, [name]: value }));
     setErrors((er) => ({ ...er, [name]: undefined }));
   };
+
+  
+useEffect(() => {
+  let cancelled = false;
+
+  async function fetchDomains() {
+    try {
+      setDomainsLoading(true);
+      setDomainsError('');
+
+      const response = await apiService.get(
+        API_CONFIG.DOMAINS.DOMAINS
+      );
+
+      // Support common API response shapes.
+      const list = Array.isArray(response)
+        ? response
+        : response?.domains ??
+          response?.data?.domains ??
+          response?.data ??
+          [];
+
+      if (!Array.isArray(list)) {
+        throw new Error('Invalid domains response from server.');
+      }
+
+      const normalized = list
+        .map((domain) => ({
+          id: domain.id ?? domain._id ?? domain.domainId,
+          name: domain.name ?? domain.title ?? domain.domainName,
+        }))
+        .filter((domain) => domain.id && domain.name);
+
+      if (!cancelled) {
+        setDomains(normalized);
+      }
+    } catch (err) {
+      if (!cancelled) {
+        setDomainsError(
+          err.message || 'Failed to load assessments.'
+        );
+      }
+    } finally {
+      if (!cancelled) {
+        setDomainsLoading(false);
+      }
+    }
+  }
+
+  fetchDomains();
+
+  return () => {
+    cancelled = true;
+  };
+}, []);
+
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -62,25 +122,56 @@ export default function Register() {
       return;
     }
 
-    const payload = {
-      ...form,
-      fullName: form.fullName.trim(),
-      email: form.email.trim().toLowerCase(),
-      courseYear: Number(form.courseYear),
-      mobileNumber: `+91${form.mobileNumber}`,
-    };
+const payload = {
+  ...form,
+  fullName: form.fullName.trim(),
+  email: form.email.trim().toLowerCase(),
+  courseYear: Number(form.courseYear),
+  mobileNumber: `+91${form.mobileNumber}`,
+};
 
-    setSubmitting(true);
-    setApiError('');
-    try {
-      const res = await registerStudent(payload);
-      setSession({ student: payload, studentId: res.studentId, domainId: payload.domainId, submitted: false });
-      navigate('/exam/instructions');
-    } catch (err) {
-      setApiError(err.message || 'Something went wrong. Please try again.');
-    } finally {
-      setSubmitting(false);
-    }
+    
+setSubmitting(true);
+setApiError('');
+
+try {
+  const res = await apiService.post(
+    API_CONFIG.USERS.REGISTER,
+    payload
+  );
+
+  if (!res?.registration?.studentId || !res?.exam?.id) {
+    throw new Error(
+      'Registration response is missing student or exam details.'
+    );
+  }
+
+  // Save the complete backend response for later pages.
+  localStorage.setItem(
+    'registrationData',
+    JSON.stringify(res)
+  );
+
+  // Keep your existing session mechanism.
+  setSession({
+    ...res,
+    student: res.registration,
+    studentId: res.registration.studentId,
+    domainId: res.registration.domainId,
+    registration: res.registration,
+    exam: res.exam,
+    nextStep: res.nextStep,
+    submitted: false,
+  });
+
+  navigate('/exam/instructions');
+} catch (err) {
+  setApiError(
+    err.message || 'Something went wrong. Please try again.'
+  );
+} finally {
+  setSubmitting(false);
+}
   }
 
   const field = (name, label, Icon, input, full = false) => (
@@ -160,7 +251,41 @@ export default function Register() {
             <div className="form-section">
               <h3><span className="fs-num">2</span> Academic details</h3>
               <div className="form-grid">
-                {field('domainId', 'Assessment', ClipboardCheck, select('domainId', DOMAINS.map((d) => ({ value: d.id, label: d.name }))), true)}
+                
+{field(
+  'domainId',
+  'Assessment',
+  ClipboardCheck,
+  <>
+    <select
+      value={form.domainId}
+      onChange={update('domainId')}
+      disabled={domainsLoading || !!domainsError}
+      className={form.domainId ? '' : 'placeholder'}
+    >
+      <option value="">
+        {domainsLoading
+          ? 'Loading assessments...'
+          : domainsError
+            ? 'Failed to load assessments'
+            : 'Select assessment'}
+      </option>
+
+      {domains.map((domain) => (
+        <option key={domain.id} value={domain.id}>
+          {domain.name}
+        </option>
+      ))}
+    </select>
+    <ChevronDown size={18} className="select-caret" />
+  </>,
+  true
+)}
+
+{domainsError && (
+  <small className="error">{domainsError}</small>
+)}
+
                 {field('instituteName', 'Institute name', Building2, <input value={form.instituteName} onChange={update('instituteName')} />, true)}
                 {field('verticalName', 'Vertical', Layers, select('verticalName', opts(VERTICALS), 'Select vertical'))}
                 {field('courseName', 'Course', GraduationCap, select('courseName', opts(COURSES), 'Select course'))}
@@ -189,7 +314,9 @@ export default function Register() {
             {apiError && <div className="alert">{apiError}</div>}
 
             <div className="form-actions">
-              <span className="muted small">All fields are required.</span>
+              <span className="muted small">
+                    Already register? <Link to="/login">Login instead</Link>
+                  </span>
               <button type="submit" className="btn btn-primary btn-lg btn-glow" disabled={submitting}>
                 {submitting ? <><Loader2 size={18} className="spin" /> Saving…</> : <>Next <ArrowRight size={18} /></>}
               </button>

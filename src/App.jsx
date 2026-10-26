@@ -6,7 +6,7 @@ import Register from './pages/Register';
 import ExamInstructions from './pages/ExamInstructions';
 import Exam from './pages/Exam';
 import ThankYou from './pages/ThankYou';
-
+import Login from './pages/Login';
 function ScrollToTop() {
   const { pathname, hash } = useLocation();
   useEffect(() => {
@@ -27,6 +27,7 @@ export default function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/instructions" element={<Instructions />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/login" element={<Login />} />
         <Route path="/exam/instructions" element={<ExamInstructions />} />
         <Route path="/exam" element={<Exam />} />
         <Route path="/thank-you" element={<ThankYou />} />
