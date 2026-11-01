@@ -17,7 +17,7 @@ function formatTime(sec) {
 }
 
 const LETTERS = 'ABCDEFGHIJ';
-const MAX_SCREEN_SWITCHES = 100;
+const MAX_SCREEN_SWITCHES = 5;
 
 /* ------------------------------------------------------------------ */
 /*  Helper: build the DTO shape the backend expects                    */
