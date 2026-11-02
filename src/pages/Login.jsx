@@ -8,7 +8,7 @@ import { Header } from '../components/Layout';
 import apiService from '../api/apiService';
 import { API_CONFIG } from '../api/apiConfig';
 import { setSession } from '../session';
-import { Stepper } from './Register';
+import { Stepper, TermsModal } from './Register';
 
 const OTP_TTL_SECONDS = 5 * 60;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -127,6 +127,7 @@ export default function Login() {
   const [notice, setNotice] = useState('');
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [redirectTo, setRedirectTo] = useState('/exam/instructions');
+  const [termsOpen, setTermsOpen] = useState(false);
 
   const otpRef = useRef(null);
   const timerRef = useRef(null);
@@ -360,6 +361,11 @@ export default function Login() {
                   </div>
                 )}
 
+                <p className="muted small terms-note">
+                  By continuing, you agree to the{' '}
+                  <button type="button" className="terms-link" onClick={() => setTermsOpen(true)}>Terms &amp; Conditions</button>.
+                </p>
+
                 <div className="form-actions">
                   <span className="muted small">
                     New here? <Link to="/register">Register instead</Link>
@@ -490,6 +496,13 @@ export default function Login() {
               </div>
             )}
           </form>
+
+          {termsOpen && (
+            <TermsModal
+              onClose={() => setTermsOpen(false)}
+              onRead={() => setTermsOpen(false)}
+            />
+          )}
         </main>
       </div>
     </div>

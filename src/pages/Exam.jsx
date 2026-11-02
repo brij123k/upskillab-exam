@@ -813,9 +813,10 @@ if (startError) {
               <div><strong>{formatTime(remaining)}</strong><span>Time left</span></div>
             </div>
             <p>
-              {answeredCount < total && 'Unanswered questions will be left blank. '}
-              You cannot change your answers after submitting.
+              Once submitted, your test is final. Unanswered questions will be left blank, and you
+              cannot change your answers or retake the test.
             </p>
+            <p>If you still have time left, we suggest you review your answers before submitting.</p>
             <div className="modal-actions">
               <button
                 className="btn btn-outline"

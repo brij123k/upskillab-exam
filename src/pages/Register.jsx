@@ -1,10 +1,10 @@
-import { useState,useEffect } from 'react';
+import { useState,useEffect,useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   User, Mail, Phone, Building2, Layers, GraduationCap, GitBranch, CalendarRange, ClipboardCheck,
-  ArrowRight, ArrowLeft, Loader2, CalendarDays, MapPin, BadgeIndianRupee, Check, ChevronDown,
+  ArrowRight, ArrowLeft, Loader2, CalendarDays, MapPin, BadgeIndianRupee, Check, ChevronDown, X,
 } from 'lucide-react';
-import { Header, Pending } from '../components/Layout';
+import { Header } from '../components/Layout';
 import apiService from '../api/apiService';
 import { API_CONFIG } from '../api/apiConfig';
 import { setSession } from '../session';
@@ -24,6 +24,19 @@ const INITIAL = {
 
 const YEAR_LABEL = { 1: '1st year', 2: '2nd year', 3: '3rd year', 4: '4th year', 5: '5th year' };
 
+const TERMS = [
+  ['Eligibility', 'This assessment is meant only for students invited by Upskillab or the institute. You must register with your own correct name, email ID and contact details.'],
+  ['One Attempt Only', 'Each candidate gets a single attempt. Once the test is submitted, it cannot be restarted, reset or retaken.'],
+  ['Timer', 'The timer starts as soon as you click Start Exam and cannot be paused. Please make sure you have a stable internet connection and a working device before you begin.'],
+  ['Own Effort', 'You must attempt the test on your own, without help from any person, website, app, AI tool or other material. Impersonation or any form of malpractice may lead to disqualification.'],
+  ['No Unfair Means', 'Do not copy, record, screenshot, share or circulate the questions in any form. All test content is the intellectual property of Upskillab.'],
+  ['Submission', 'Answers cannot be changed after submission. Unanswered questions are left blank and will not be evaluated.'],
+  ['Technical Issues', 'Upskillab is not responsible for interruptions caused by your device, internet connection or browser. Avoid refreshing, closing or switching tabs during the test. For genuine technical issues, contact the support team immediately.'],
+  ['Data & Privacy', 'Your personal details and test responses will be used only for assessment, evaluation and reporting to your institute. They will be kept confidential and will not be shared with any unauthorised third party.'],
+  ['Results', 'Results and reports will be shared through the official channel by Upskillab or your institute. Upskillab’s decision on evaluation is final.'],
+  ['Right to Disqualify', 'Upskillab reserves the right to cancel or disqualify any attempt found to violate these terms.'],
+];
+
 function validate(f, consent) {
   const e = {};
   if (!f.domainId) e.domainId = 'Please select an assessment.';
@@ -35,7 +48,7 @@ function validate(f, consent) {
   if (f.fullName.trim().length < 2) e.fullName = 'Please enter your full name.';
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim())) {e.email = 'Please enter a valid email address.';}
   if (!/^[6-9]\d{9}$/.test(f.mobileNumber)) e.mobileNumber = 'Enter a valid 10-digit mobile number.';
-  if (!consent) e.consent = 'Please accept the consent to continue.';
+  if (!consent) e.consent = 'Please read and accept the Terms & Conditions to continue.';
   return e;
 }
 
@@ -43,6 +56,9 @@ export default function Register() {
   const navigate = useNavigate();
   const [form, setForm] = useState(INITIAL);
   const [consent, setConsent] = useState(false);
+  const [termsOpen, setTermsOpen] = useState(false);
+  const [termsRead, setTermsRead] = useState(false);
+  const consentRef = useRef(null);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [apiError, setApiError] = useState('');
@@ -296,17 +312,23 @@ try {
 
             <label className={`consent-box ${consent ? 'checked' : ''} ${errors.consent ? 'has-error' : ''}`}>
               <input
+                ref={consentRef}
                 type="checkbox"
                 checked={consent}
                 onChange={(e) => {
+                  // The terms must be read before the box can be ticked.
+                  if (!termsRead) {
+                    setTermsOpen(true);
+                    return;
+                  }
                   setConsent(e.target.checked);
                   setErrors((er) => ({ ...er, consent: undefined }));
                 }}
               />
               <span className="check-ui">{consent && <Check size={14} strokeWidth={3} />}</span>
               <span>
-                I consent to Upskillab collecting and using my responses and academic information for the
-                purposes of this programme, and <Pending>confirm what is shared with Ashoka Institute and in what form</Pending>.
+                I have read and agree to the Terms &amp; Conditions.{' '}
+                <button type="button" className="terms-link" onClick={() => setTermsOpen(true)}>Read more</button>
               </span>
             </label>
             {errors.consent && <small className="error">{errors.consent}</small>}
@@ -322,7 +344,53 @@ try {
               </button>
             </div>
           </form>
+
+          {termsOpen && (
+            <TermsModal
+              onClose={() => setTermsOpen(false)}
+              onRead={() => {
+                setTermsRead(true);
+                setTermsOpen(false);
+                consentRef.current?.focus();
+              }}
+            />
+          )}
         </main>
+      </div>
+    </div>
+  );
+}
+
+export function TermsModal({ onClose, onRead }) {
+  const bodyRef = useRef(null);
+
+  useEffect(() => {
+    bodyRef.current?.focus();
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="terms-title">
+      <div className="modal terms-modal">
+        <div className="terms-head">
+          <h3 id="terms-title">Terms &amp; Conditions</h3>
+          <button type="button" className="terms-close" onClick={onClose} aria-label="Close"><X size={20} /></button>
+        </div>
+        <div className="terms-body" ref={bodyRef} tabIndex={0}>
+          <p>By registering for this assessment, you agree to the following:</p>
+          <ol>
+            {TERMS.map(([title, text]) => (
+              <li key={title}><strong>{title}:</strong> {text}</li>
+            ))}
+          </ol>
+        </div>
+        <button type="button" className="btn btn-primary terms-accept" onClick={onRead}>
+          <Check size={18} /> I have read this
+        </button>
       </div>
     </div>
   );

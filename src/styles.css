@@ -603,7 +603,7 @@ kbd { font-family: inherit; font-size: .75rem; background: #f4f1f6; border: 1px 
 
 .modal-backdrop, .sheet-backdrop { position: fixed; inset: 0; background: rgba(30, 15, 40, .55); backdrop-filter: blur(4px); display: grid; place-items: center; padding: 16px; z-index: 100; animation: fade .2s; }
 @keyframes fade { from { opacity: 0; } }
-.modal { background: var(--white); border-radius: 26px; padding: 34px; max-width: 460px; width: 100%; text-align: center; box-shadow: var(--shadow-lg); animation: modalIn .3s var(--ease); }
+.modal { background: var(--white); border-radius: 26px; padding: 34px; max-width: 460px; width: 100%; max-height: calc(100dvh - 32px); overflow-y: auto; text-align: center; box-shadow: var(--shadow-lg); animation: modalIn .3s var(--ease); }
 @keyframes modalIn { from { opacity: 0; transform: translateY(20px) scale(.96); } }
 .modal-icon { width: 64px; height: 64px; border-radius: 20px; margin: 0 auto 16px; display: grid; place-items: center; background: var(--orange-soft); color: var(--orange); }
 .modal-icon.warn { background: #fff4d6; color: #c98a00; }
@@ -613,6 +613,18 @@ kbd { font-family: inherit; font-size: .75rem; background: #f4f1f6; border: 1px 
 .modal-stats span { font-size: .74rem; color: var(--muted); }
 .modal p { color: var(--body); font-size: .92rem; }
 .modal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
+.terms-link { padding: 0; border: 0; background: none; font: inherit; font-weight: 600; color: var(--orange); text-decoration: underline; cursor: pointer; }
+.terms-note { margin: 16px 0 0; }
+.terms-modal { max-width: 620px; display: flex; flex-direction: column; text-align: left; }
+.terms-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
+.terms-head h3 { margin: 0; }
+.terms-close { display: grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; border: 0; border-radius: 10px; background: var(--purple-soft); color: var(--purple); cursor: pointer; }
+.terms-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-right: 8px; font-size: .92rem; color: var(--body); outline: none; }
+.terms-body p { margin: 0 0 12px; }
+.terms-body ol { margin: 0; padding-left: 20px; }
+.terms-body li { margin-bottom: 10px; }
+.terms-body strong { color: var(--purple); }
+.terms-accept { margin-top: 18px; align-self: flex-end; }
 .sheet-backdrop { place-items: end center; padding: 0; }
 .sheet { background: var(--white); width: 100%; max-width: 560px; border-radius: 26px 26px 0 0; padding: 14px 22px 28px; animation: sheetIn .3s var(--ease); }
 @keyframes sheetIn { from { transform: translateY(100%); } }
@@ -632,14 +644,10 @@ kbd { font-family: inherit; font-size: .75rem; background: #f4f1f6; border: 1px 
 .check { position: relative; width: 96px; height: 96px; border-radius: 50%; background: var(--grad); color: #fff; display: grid; place-items: center; box-shadow: 0 16px 40px -10px rgba(255,116,38,.6); animation: pop .6s var(--ease); }
 .check-ring { position: absolute; inset: -12px; border-radius: 50%; border: 2px solid rgba(255,116,38,.35); animation: ring 2s ease-out infinite; }
 @keyframes ring { from { transform: scale(.85); opacity: 1; } to { transform: scale(1.35); opacity: 0; } }
-.thanks h1 { font-size: clamp(1.8rem, 4vw, 2.4rem); font-weight: 800; }
+.thanks h1 { font-size: clamp(1.5rem, 3.4vw, 1.9rem); font-weight: 800; }
 .thanks-lead { color: var(--body); font-size: 1.05rem; }
-.thanks-info { display: grid; gap: 10px; width: 100%; margin: 6px 0 22px; text-align: left; }
-.thanks-info div { display: flex; gap: 12px; align-items: flex-start; background: var(--cream); padding: 14px 16px; border-radius: 14px; font-size: .9rem; color: var(--body); }
-.thanks-info svg { color: var(--orange); flex-shrink: 0; margin-top: 2px; }
-.redirect-row { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: .9rem; margin-bottom: 20px; }
-.redirect-ring circle { transform: rotate(-90deg); transform-origin: 50% 50%; }
-.redirect-ring text { font-size: 13px; font-weight: 700; fill: var(--purple); font-family: inherit; }
+.thanks-text { color: var(--body); font-size: .95rem; }
+.thanks-sign { color: var(--purple); font-weight: 600; margin-bottom: 20px; }
 
 /* ===== Responsive ===== */
 @media (max-width: 1024px) {
@@ -730,6 +738,7 @@ kbd { font-family: inherit; font-size: .75rem; background: #f4f1f6; border: 1px 
   .timer-text small { display: none; }
   .modal { padding: 26px 20px; }
   .modal-actions { grid-template-columns: 1fr; }
+  .terms-accept { align-self: stretch; }
   .thanks { padding: 34px 22px; }
 }
 
