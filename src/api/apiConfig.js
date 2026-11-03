@@ -25,6 +25,7 @@ export const API_CONFIG = {
     SAVEANSWER:(quesitionId)=> `/exam-answers/public/${quesitionId}`,
     SUBMITANSWER:"/exam-answers/submit/public",
     SWICHSCREENDATA:(attemptId)=>`public/exam-attempts/${attemptId}/screen-switch`,
+    SWICHSCREENcheckstatus:(attemptId)=>`public/exam-attempts/${attemptId}/check-status`,
     SUBMITEXPIRE:(attemptId)=>`public/exam-attempts/${attemptId}/submit`,
   },
   PRODUCTS: {

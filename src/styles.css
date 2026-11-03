@@ -569,7 +569,7 @@ button { font-family: inherit; }
   border: 1.5px solid var(--border); border-radius: 16px; background: var(--white); cursor: pointer;
   font-size: 1rem; color: var(--text); transition: all .2s var(--ease);
 }
-.option:hover { border-color: #f5b38e; background: #fffaf7; transform: translateX(4px); }
+.option:hover { border-color: #f5b38e; background: #fffaf7; }
 .option.selected { border-color: var(--orange); background: var(--orange-soft); box-shadow: 0 8px 20px -12px rgba(255,116,38,.6); }
 .opt-key { width: 38px; height: 38px; border-radius: 11px; background: var(--purple-soft); color: var(--purple); display: grid; place-items: center; font-weight: 700; flex-shrink: 0; transition: all .2s; }
 .option.selected .opt-key { background: var(--grad); color: #fff; }

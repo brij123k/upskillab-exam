@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ArrowRight, Send, Loader2, AlertTriangle,
-  LayoutGrid, Clock, ShieldAlert,
+  LayoutGrid, Clock, ShieldAlert, RotateCcw, ShieldX
 } from 'lucide-react';
 import { Logos } from '../components/Layout';
 import apiService from '../api/apiService';
@@ -19,9 +19,6 @@ function formatTime(sec) {
 const LETTERS = 'ABCDEFGHIJ';
 const MAX_SCREEN_SWITCHES = 5;
 
-/* ------------------------------------------------------------------ */
-/*  Helper: build the DTO shape the backend expects                    */
-/* ------------------------------------------------------------------ */
 function toSelectedOptionIds(value) {
   if (Array.isArray(value)) return value;
   if (typeof value === 'string' && value) return [value];
@@ -45,15 +42,26 @@ export default function Exam() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  
+  // Screen switch & Pause states
+  const [screenSwitchCount, setScreenSwitchCount] = useState(
+    parseInt(sessionStorage.getItem('screenSwitchCount') || '0', 10)
+  );
+  const [pauseModalOpen, setPauseModalOpen] = useState(false);
+  const [checkingStatus, setCheckingStatus] = useState(false);
   const [warning, setWarning] = useState('');
-  const [screenSwitchCount, setScreenSwitchCount] = useState(0);
 
   const submittedRef = useRef(false);
   const expireHandledRef = useRef(false);
-  const saveTimers = useRef({}); // per-question debounce timers
+  const saveTimers = useRef({});
   const attemptTokenRef = useRef(null);
 
   const totalSeconds = exam ? exam.durationMinutes * 60 : 0;
+
+  // Sync screen switch count to sessionStorage
+  useEffect(() => {
+    sessionStorage.setItem('screenSwitchCount', screenSwitchCount.toString());
+  }, [screenSwitchCount]);
 
   /* ================================================================ */
   /*  START / RESUME                                                   */
@@ -70,7 +78,6 @@ export default function Exam() {
         const savedData = JSON.parse(
           localStorage.getItem('registrationData') || 'null'
         );
-        console.log('Stored session:', stored);
 
         const registrationId =
           stored.registration?.id || savedData?.registration?.id;
@@ -100,8 +107,20 @@ export default function Exam() {
           throw new Error('The server returned an invalid exam response.');
         }
 
+        // Handle Paused status from Start API
+        if (response.attempt.status === 'paused' || response.canContinue === false) {
+          setPauseModalOpen(true);
+        }
+
         attemptTokenRef.current = response.attemptToken;
-        localStorage.setItem("accessToken",response.attemptToken);
+        localStorage.setItem("accessToken", response.attemptToken);
+        
+        // Update local screen switch count based on server
+        if (response.attempt.screenSwitchCount !== undefined) {
+          setScreenSwitchCount(response.attempt.screenSwitchCount);
+          sessionStorage.setItem('screenSwitchCount', response.attempt.screenSwitchCount.toString());
+        }
+
         /* -------- normalize questions -------- */
         const normalizedQuestions = response.questions
           .slice()
@@ -161,7 +180,6 @@ export default function Exam() {
         setAttempt(response.attempt);
         setRemaining(remainingFromServer);
         setAnswers(migratedAnswers);
-        setScreenSwitchCount(response.attempt.screenSwitchCount || 0);
         setCurrent((c) =>
           Math.min(Math.max(0, c || 0), normalizedQuestions.length - 1)
         );
@@ -184,7 +202,6 @@ export default function Exam() {
           submitted: false,
         });
 
-        /* -------- resume path: if already expired, autosubmit -------- */
         if (remainingFromServer <= 0) {
           expireHandledRef.current = true;
           await submitExpired(response.attempt.attemptId);
@@ -206,23 +223,21 @@ export default function Exam() {
   }, []);
 
   /* ================================================================ */
-  /*  SAVE ONE ANSWER (called per selection)                           */
+  /*  SAVE ONE ANSWER                                                  */
   /* ================================================================ */
   const saveAnswer = useCallback(async (questionId, selectedOptionIds) => {
     if (!attemptTokenRef.current) return;
     try {
-      const res = await apiService.post(
+      await apiService.post(
         API_CONFIG.EXAMS.SAVEANSWER(questionId),
         { selectedOptionIds },
       );
-      console.log(res)
     } catch (e) {
       setWarning('Could not save last answer. Check your connection.');
       setTimeout(() => setWarning(''), 3500);
     }
   }, []);
 
-  /* Debounced per-question saver so fast clicks don't hammer the API */
   const queueSave = useCallback(
     (questionId, selectedOptionIds) => {
       clearTimeout(saveTimers.current[questionId]);
@@ -234,29 +249,12 @@ export default function Exam() {
   );
 
   /* ================================================================ */
-  /*  EXPIRED SUBMIT (called when timer hits 0)                        */
+  /*  EXPIRED SUBMIT                                                   */
   /* ================================================================ */
-  const submitExpired = useCallback(
-    async (attemptId) => {
-      if (submittedRef.current) return;
-      submittedRef.current = true;
-      try {
-        await apiService.post(
-          API_CONFIG.EXAMS.SUBMITEXPIRE(attemptId),
-          {},
-          { headers: { authorization: attemptTokenRef.current || '' } }
-        );
-      } catch (_) {
-        /* swallow — we still redirect */
-      }
-      setSession({ submitted: true });
-      navigate('/thank-you', { replace: true });
-    },
-    [navigate]
-  );
+
 
   /* ================================================================ */
-  /*  SUBMIT — sends ALL answers at once                               */
+  /*  SUBMIT                                                           */
   /* ================================================================ */
   const submit = useCallback(async () => {
     if (submittedRef.current) return;
@@ -284,17 +282,12 @@ export default function Exam() {
         })
         .filter(Boolean);
 
-      const payload = {
-        answers: finalAnswers,
-      };
-
-      await apiService.post(API_CONFIG.EXAMS.SUBMITANSWER, payload, {
-        headers: {
-          authorization: attemptTokenRef.current || '',
-        },
+      await apiService.post(API_CONFIG.EXAMS.SUBMITANSWER, { answers: finalAnswers }, {
+        headers: { authorization: attemptTokenRef.current || '' },
       });
 
       setSession({ submitted: true });
+      sessionStorage.removeItem('screenSwitchCount');
       navigate('/thank-you', { replace: true });
     } catch (e) {
       submittedRef.current = false;
@@ -303,8 +296,26 @@ export default function Exam() {
     }
   }, [navigate, questions]);
 
+    const submitExpired = useCallback(
+    async (attemptId) => {
+      if (submittedRef.current) return;
+      submittedRef.current = true;
+      try {
+        await apiService.post(
+          API_CONFIG.EXAMS.SUBMITEXPIRE(attemptId),
+          submit(),
+          {},
+          { headers: { authorization: attemptTokenRef.current || '' } }
+        );
+      } catch (_) {}
+      setSession({ submitted: true });
+      sessionStorage.removeItem('screenSwitchCount');
+      navigate('/thank-you', { replace: true });
+    },
+    [navigate]
+  );
   /* ================================================================ */
-  /*  TIMER — always derived from expiresAt                            */
+  /*  TIMER                                                            */
   /* ================================================================ */
   useEffect(() => {
     if (!exam) return;
@@ -340,7 +351,7 @@ export default function Exam() {
   }, []);
 
   /* ================================================================ */
-  /*  PERSIST LOCAL PROGRESS (refresh-safe)                            */
+  /*  PERSIST LOCAL PROGRESS                                           */
   /* ================================================================ */
   useEffect(() => {
     if (!exam) return;
@@ -354,7 +365,7 @@ export default function Exam() {
   /*  KEYBOARD SHORTCUTS                                               */
   /* ================================================================ */
   useEffect(() => {
-    if (!q) return;
+    if (!q || pauseModalOpen) return;
     const onKey = (e) => {
       if (confirmOpen || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')
         return;
@@ -370,11 +381,21 @@ export default function Exam() {
             const next = cur.includes(optId)
               ? cur.filter((x) => x !== optId)
               : [...cur, optId];
-            queueSave(q.id, next);
+            
+            // Only save if there's at least one option selected
+            if (next.length > 0) {
+              queueSave(q.id, next);
+            }
             return { ...a, [q.id]: next };
           });
         } else {
           setAnswers((a) => {
+            // Allow toggling off if clicked again without saving empty array
+            if (a[q.id] === optId) {
+              const next = { ...a };
+              delete next[q.id];
+              return next;
+            }
             queueSave(q.id, [optId]);
             return { ...a, [q.id]: optId };
           });
@@ -387,14 +408,14 @@ export default function Exam() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [q, current, total, confirmOpen, queueSave]);
+  }, [q, current, total, confirmOpen, queueSave, pauseModalOpen]);
 
   /* ================================================================ */
   /*  SCREEN-SWITCH DETECTION                                          */
   /* ================================================================ */
   const reportScreenSwitch = useCallback(async () => {
     const s = getSession();
-    if (!s.attemptId || submittedRef.current) return;
+    if (!s.attemptId || submittedRef.current || pauseModalOpen) return;
 
     try {
       const res = await apiService.post(
@@ -403,28 +424,36 @@ export default function Exam() {
         { headers: { authorization: attemptTokenRef.current || '' } }
       );
 
-      const newCount = res?.screenSwitchCount ?? screenSwitchCount + 1;
+      const { status, screenSwitchCount: newCount, canContinue } = res;
+      
       setScreenSwitchCount(newCount);
+      sessionStorage.setItem('screenSwitchCount', newCount.toString());
       setSession({ screenSwitchCount: newCount });
 
-      if (res?.status === 'submitted' || res?.status === 'expired') {
+      if (status === 'submitted' || status === 'expired') {
         submittedRef.current = true;
-        setSession({ submitted: true, submissionReason: res?.submissionReason });
+        setSession({ submitted: true });
+        sessionStorage.removeItem('screenSwitchCount');
         navigate('/thank-you', { replace: true });
         return;
       }
 
-      setWarning(
-        `Warning: tab switch detected (${newCount}/${MAX_SCREEN_SWITCHES}). Your exam will be auto-submitted if you exceed the limit.`
-      );
-      setTimeout(() => setWarning(''), 5000);
+      if (status === 'paused' || canContinue === false) {
+        setPauseModalOpen(true);
+      } else {
+        setWarning(
+          `Warning: Tab switch detected (${newCount}/${MAX_SCREEN_SWITCHES}). Please stay on this page.`
+        );
+        setTimeout(() => setWarning(''), 5000);
+      }
     } catch (e) {
       setWarning('Could not record screen switch. Please stay on this page.');
+      setTimeout(() => setWarning(''), 3000);
     }
-  }, [navigate, screenSwitchCount]);
+  }, [navigate, pauseModalOpen]);
 
   useEffect(() => {
-    if (!exam) return;
+    if (!exam || pauseModalOpen) return;
 
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') reportScreenSwitch();
@@ -437,7 +466,31 @@ export default function Exam() {
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('blur', onBlur);
     };
-  }, [exam, reportScreenSwitch]);
+  }, [exam, reportScreenSwitch, pauseModalOpen]);
+
+  /* ================================================================ */
+  /*  CHECK STATUS FOR PAUSED EXAM                                     */
+  /* ================================================================ */
+  const handleCheckStatus = async () => {
+    setCheckingStatus(true);
+    try {
+      const s = getSession();
+      const res = await apiService.get(API_CONFIG.EXAMS.SWICHSCREENcheckstatus(s.attemptId));
+      
+      if (res.status === 'in_progress' || res.canContinue === true) {
+        setPauseModalOpen(false);
+        setWarning('');
+      } else {
+        setWarning('Your exam is still paused. Please contact the administrator.');
+        setTimeout(() => setWarning(''), 3000);
+      }
+    } catch (e) {
+      setWarning('Could not connect to server. Check your internet.');
+      setTimeout(() => setWarning(''), 3000);
+    } finally {
+      setCheckingStatus(false);
+    }
+  };
 
   /* ================================================================ */
   /*  GUARDS                                                          */
@@ -446,146 +499,37 @@ export default function Exam() {
   if (initialSession.submitted) return <Navigate to="/thank-you" replace />;
 
   if (starting) {
-  return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '16px',
-        background: 'linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%)',
-        padding: '24px',
-        textAlign: 'center',
-      }}
-    >
-      <div
-        style={{
-          width: '72px',
-          height: '72px',
-          borderRadius: '50%',
-          background: '#fff',
-          boxShadow: '0 10px 30px rgba(79, 70, 229, 0.18)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: '#4f46e5',
-        }}
-      >
-        <Loader2 size={32} className="spin" />
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px', background: 'linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%)', padding: '24px', textAlign: 'center' }}>
+        <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#fff', boxShadow: '0 10px 30px rgba(79, 70, 229, 0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#4f46e5' }}>
+          <Loader2 size={32} className="spin" />
+        </div>
+        <p style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#334155' }}>Preparing your exam…</p>
       </div>
-      <p
-        style={{
-          margin: 0,
-          fontSize: '1.05rem',
-          fontWeight: 600,
-          color: '#334155',
-          letterSpacing: '0.01em',
-        }}
-      >
-        Preparing your exam…
-      </p>
-      <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>
-        Loading questions and starting the timer
-      </span>
-    </div>
-  );
-}
+    );
+  }
 
-if (startError) {
-  return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '20px',
-        background: 'linear-gradient(135deg, #fef2f2 0%, #f8fafc 100%)',
-        padding: '24px',
-        textAlign: 'center',
-      }}
-    >
-      <div
-        style={{
-          width: '72px',
-          height: '72px',
-          borderRadius: '50%',
-          background: '#fff',
-          boxShadow: '0 10px 30px rgba(220, 38, 38, 0.18)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: '#dc2626',
-        }}
-      >
-        <AlertTriangle size={32} />
+  if (startError) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)', padding: '24px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+        <div style={{ maxWidth: '520px', width: '100%', background: '#ffffff', borderRadius: '24px', padding: '48px 32px', boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+          <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '24px' }}>
+            <AlertTriangle color="#ef4444" size={36} strokeWidth={2.5} />
+          </div>
+          <h1 style={{ margin: '0 0 12px', fontSize: '1.5rem', fontWeight: '700', color: '#111827' }}>Unable to Start Exam</h1>
+          <p style={{ margin: '0 0 32px', fontSize: '0.95rem', color: '#6b7280', lineHeight: '1.6' }}>{startError}</p>
+          <div style={{ display: 'flex', gap: '12px', width: '100%', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <button onClick={() => window.location.reload()} style={{ flex: '1 1 200px', padding: '12px 24px', fontSize: '0.95rem', fontWeight: '600', color: '#4f46e5', backgroundColor: '#ffffff', border: '2px solid #e0e7ff', borderRadius: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              <RotateCcw size={18} /> Try Again
+            </button>
+            <button onClick={() => navigate('/register')} style={{ flex: '1 1 200px', padding: '12px 24px', fontSize: '0.95rem', fontWeight: '600', color: '#ffffff', background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', border: 'none', borderRadius: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              <ArrowLeft size={18} /> Back to Registration
+            </button>
+          </div>
+        </div>
       </div>
-      <div style={{ maxWidth: '480px' }}>
-        <p
-          style={{
-            margin: '0 0 6px',
-            fontSize: '1.15rem',
-            fontWeight: 700,
-            color: '#0f172a',
-          }}
-        >
-          Couldn’t start your exam
-        </p>
-        <p
-          style={{
-            margin: 0,
-            fontSize: '0.95rem',
-            color: '#64748b',
-            lineHeight: 1.5,
-          }}
-        >
-          {startError}
-        </p>
-      </div>
-      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
-        <button
-          onClick={() => window.location.reload()}
-          style={{
-            padding: '10px 20px',
-            fontSize: '0.9rem',
-            fontWeight: 600,
-            color: '#4f46e5',
-            background: '#fff',
-            border: '1.5px solid #4f46e5',
-            borderRadius: '10px',
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            transition: 'all 0.15s ease',
-          }}
-        >
-          Try again
-        </button>
-        <button
-          onClick={() => navigate('/register')}
-          style={{
-            padding: '10px 20px',
-            fontSize: '0.9rem',
-            fontWeight: 600,
-            color: '#fff',
-            background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
-            border: 'none',
-            borderRadius: '10px',
-            cursor: 'pointer',
-            boxShadow: '0 8px 20px rgba(79, 70, 229, 0.3)',
-            transition: 'all 0.15s ease',
-          }}
-        >
-          Back to registration
-        </button>
-      </div>
-    </div>
-  );
-}
+    );
+  }
 
   if (!exam) return null;
 
@@ -603,18 +547,26 @@ if (startError) {
   const C = 2 * Math.PI * R;
 
   const toggleOption = (optId) => {
-    if (!q) return;
+    if (!q || pauseModalOpen) return;
     if (q.answerMode === 'multiple') {
       setAnswers((a) => {
         const cur = Array.isArray(a[q.id]) ? a[q.id] : [];
         const next = cur.includes(optId)
           ? cur.filter((x) => x !== optId)
           : [...cur, optId];
-        queueSave(q.id, next);
+        
+        if (next.length > 0) {
+          queueSave(q.id, next);
+        }
         return { ...a, [q.id]: next };
       });
     } else {
       setAnswers((a) => {
+        if (a[q.id] === optId) {
+          const next = { ...a };
+          delete next[q.id];
+          return next;
+        }
         queueSave(q.id, [optId]);
         return { ...a, [q.id]: optId };
       });
@@ -653,26 +605,15 @@ if (startError) {
   );
 
   return (
-    <div className="exam-page">
+    <div className="exam-page" style={{ position: 'relative' }}>
       <header className="exam-header">
         <div className="container exam-header-inner">
           <Logos compact />
           <div className="exam-title-mini">{exam.title}</div>
-          <div
-            className={`timer ${lowTime ? 'timer-low' : ''}`}
-            aria-live="polite"
-            title="Time remaining"
-          >
+          <div className={`timer ${lowTime ? 'timer-low' : ''}`} aria-live="polite">
             <svg width="48" height="48" viewBox="0 0 48 48">
               <circle cx="24" cy="24" r={R} className="ring-bg" />
-              <circle
-                cx="24"
-                cy="24"
-                r={R}
-                className="ring-fg"
-                strokeDasharray={C}
-                strokeDashoffset={C * (1 - pct)}
-              />
+              <circle cx="24" cy="24" r={R} className="ring-fg" strokeDasharray={C} strokeDashoffset={C * (1 - pct)} />
             </svg>
             <div className="timer-text">
               <small><Clock size={12} /> Time left</small>
@@ -681,74 +622,59 @@ if (startError) {
           </div>
         </div>
         <div className="progress">
-          <div
-            className="progress-bar"
-            style={{ width: `${total ? (answeredCount / total) * 100 : 0}%` }}
-          />
+          <div className="progress-bar" style={{ width: `${total ? (answeredCount / total) * 100 : 0}%` }} />
         </div>
         <div className="exam-warnings">
           <span className="sw-count">
-            <ShieldAlert size={14} />
-            Tab switches: {screenSwitchCount}/{MAX_SCREEN_SWITCHES}
+            <ShieldAlert size={14} /> Tab switches: {screenSwitchCount}/{MAX_SCREEN_SWITCHES}
           </span>
         </div>
       </header>
 
       {warning && (
-        <div className="global-warning">
-          <AlertTriangle size={16} /> {warning}
+        <div style={{ position: 'fixed', top: '80px', left: '50%', transform: 'translateX(-50%)', background: '#ef4444', color: '#fff', padding: '12px 24px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)', zIndex: 9999 }}>
+          <AlertTriangle size={18} /> {warning}
         </div>
       )}
 
-      <main className="container exam-body">
-        <div className="exam-main">
+      <main className="container exam-body" style={{ paddingBottom: '40px' }}>
+        <div className="exam-main" style={{ flex: 1 }}>
           {q ? (
-            <div className="q-card" key={q.id}>
+            <div className="q-card" key={q.id} style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <div className="q-meta">
-                <span className="q-badge">
-                  Question {current + 1} <em>/ {total}</em>
-                </span>
+                <span className="q-badge">Question {current + 1} <em>/ {total}</em></span>
                 <span className="q-mode">
-                  {q.answerMode === 'multiple' ? 'Multiple answers' : 'Single answer'}
-                  {q.marks ? ` · ${q.marks} marks` : ''}
+                  {q.answerMode === 'multiple' ? 'Multiple answers' : 'Single answer'} {q.marks ? `· ${q.marks} marks` : ''}
                 </span>
                 <button className="pal-toggle" onClick={() => setPaletteOpen(true)}>
                   <LayoutGrid size={16} /> {answeredCount}/{total}
                 </button>
               </div>
 
-              <h2 className="q-text">{q.text}</h2>
+              <h2 className="q-text" style={{ fontSize: '1.1rem', flexShrink: 0 }}>{q.text}</h2>
 
-              <div
-                className="options"
-                role={q.answerMode === 'multiple' ? 'group' : 'radiogroup'}
-              >
+              <div className="options" role={q.answerMode === 'multiple' ? 'group' : 'radiogroup'} style={{ flex: 1, overflowY: 'auto', paddingBottom: '20px' }}>
                 {q.options.map((o, i) => {
-                  const selected =
-                    q.answerMode === 'multiple'
-                      ? Array.isArray(answers[q.id]) && answers[q.id].includes(o.id)
-                      : answers[q.id] === o.id;
+                  const selected = q.answerMode === 'multiple' ? Array.isArray(answers[q.id]) && answers[q.id].includes(o.id) : answers[q.id] === o.id;
                   return (
                     <button
                       key={o.id}
                       type="button"
-                      role={q.answerMode === 'multiple' ? 'checkbox' : 'radio'}
-                      aria-checked={selected}
                       className={`option ${selected ? 'selected' : ''}`}
                       onClick={() => toggleOption(o.id)}
+                      disabled={pauseModalOpen}
+                      style={{ overflow: 'hidden', display: 'flex', alignItems: 'center', wordBreak: 'break-word', whiteSpace: 'normal', textAlign: 'left', width: '100%' }}
                     >
                       <span className="opt-key">{LETTERS[i]}</span>
-                      <span className="opt-text">{o.text}</span>
+                      <span className="opt-text" style={{ fontSize: '0.95rem' }}>{o.text}</span>
                       <span className={q.answerMode === 'multiple' ? 'checkbox' : 'radio'} />
                     </button>
                   );
                 })}
               </div>
 
-              <p className="kbd-hint">
-                Tip: press <kbd>A</kbd>–<kbd>{LETTERS[Math.max(0, q.options.length - 1)]}</kbd>{' '}
-                {q.answerMode === 'multiple' ? 'to toggle' : 'to choose'}, <kbd>←</kbd>{' '}
-                <kbd>→</kbd> to move.
+              <p className="kbd-hint" style={{ marginTop: 'auto' }}>
+                Tip: press <kbd>A</kbd>–<kbd>{LETTERS[Math.max(0, q.options.length - 1)]}</kbd> {q.answerMode === 'multiple' ? 'to toggle' : 'to choose'}, <kbd>←</kbd> <kbd>→</kbd> to move.
               </p>
             </div>
           ) : (
@@ -758,26 +684,15 @@ if (startError) {
           {error && <div className="alert">{error}</div>}
 
           <div className="exam-nav">
-            <button
-              className="btn btn-outline"
-              disabled={current === 0}
-              onClick={() => setCurrent((c) => c - 1)}
-            >
+            <button className="btn btn-outline" disabled={current === 0 || pauseModalOpen} onClick={() => setCurrent((c) => c - 1)}>
               <ArrowLeft size={18} /> Previous
             </button>
             {isLast ? (
-              <button
-                className="btn btn-primary btn-glow"
-                onClick={() => setConfirmOpen(true)}
-                disabled={submitting}
-              >
+              <button className="btn btn-primary btn-glow" onClick={() => setConfirmOpen(true)} disabled={submitting || pauseModalOpen}>
                 Submit <Send size={17} />
               </button>
             ) : (
-              <button
-                className="btn btn-primary"
-                onClick={() => setCurrent((c) => c + 1)}
-              >
+              <button className="btn btn-primary" onClick={() => setCurrent((c) => c + 1)} disabled={pauseModalOpen}>
                 Next <ArrowRight size={18} />
               </button>
             )}
@@ -800,7 +715,7 @@ if (startError) {
         </div>
       )}
 
-      {confirmOpen && (
+      {confirmOpen && !pauseModalOpen && (
         <div className="modal-backdrop" role="dialog" aria-modal="true">
           <div className="modal">
             <div className={`modal-icon ${answeredCount < total ? 'warn' : ''}`}>
@@ -812,27 +727,71 @@ if (startError) {
               <div><strong>{total - answeredCount}</strong><span>Unanswered</span></div>
               <div><strong>{formatTime(remaining)}</strong><span>Time left</span></div>
             </div>
-            <p>
-              Once submitted, your test is final. Unanswered questions will be left blank, and you
-              cannot change your answers or retake the test.
-            </p>
-            <p>If you still have time left, we suggest you review your answers before submitting.</p>
+            <p>Once submitted, your test is final. Unanswered questions will be left blank.</p>
             <div className="modal-actions">
-              <button
-                className="btn btn-outline"
-                onClick={() => setConfirmOpen(false)}
-                disabled={submitting}
-              >
-                Review answers
-              </button>
+              <button className="btn btn-outline" onClick={() => setConfirmOpen(false)} disabled={submitting}>Review answers</button>
               <button className="btn btn-primary" onClick={submit} disabled={submitting}>
-                {submitting ? (
-                  <><Loader2 size={17} className="spin" /> Submitting…</>
-                ) : (
-                  'Yes, submit'
-                )}
+                {submitting ? <><Loader2 size={17} className="spin" /> Submitting…</> : 'Yes, submit'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {pauseModalOpen && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', zIndex: 99999
+        }}>
+          <div style={{
+            background: '#fff', borderRadius: '24px', maxWidth: '480px', width: '100%',
+            padding: '40px 32px', textAlign: 'center', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+            position: 'relative', overflow: 'hidden'
+          }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '6px', background: '#ef4444' }}></div>
+            
+            <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+              <ShieldX color="#ef4444" size={40} strokeWidth={2.5} />
+            </div>
+
+            <h2 style={{ margin: '0 0 12px', fontSize: '1.4rem', fontWeight: '800', color: '#0f172a' }}>
+              Exam Paused
+            </h2>
+            
+            <p style={{ margin: '0 0 24px', fontSize: '0.95rem', color: '#64748b', lineHeight: '1.6' }}>
+              Your exam has been paused due to multiple screen switch violations. 
+              You cannot continue at this time.
+            </p>
+
+            <div style={{ background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '12px', padding: '16px', marginBottom: '24px', textAlign: 'left' }}>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: '#991b1b', fontWeight: '600' }}>
+                What to do next:
+              </p>
+              <ul style={{ margin: '8px 0 0 0', paddingLeft: '20px', fontSize: '0.85rem', color: '#991b1b', lineHeight: '1.5' }}>
+                <li>Contact your administrator immediately.</li>
+                <li>Ask them to resume your exam.</li>
+                <li>Click "Check Status" below once they approve.</li>
+              </ul>
+            </div>
+
+            {warning && (
+              <div style={{ marginBottom: '16px', padding: '10px', background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: '8px', color: '#b45309', fontSize: '0.85rem', fontWeight: '500' }}>
+                {warning}
+              </div>
+            )}
+
+            <button
+              onClick={handleCheckStatus}
+              disabled={checkingStatus}
+              style={{
+                width: '100%', padding: '14px', background: '#4f46e5', color: '#fff',
+                border: 'none', borderRadius: '12px', fontSize: '1rem', fontWeight: '600',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                opacity: checkingStatus ? 0.7 : 1, transition: 'all 0.2s ease'
+              }}
+            >
+              {checkingStatus ? <><Loader2 size={18} className="spin" /> Checking Status…</> : 'Check Status'}
+            </button>
           </div>
         </div>
       )}
